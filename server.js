@@ -1,6 +1,6 @@
- const express = require('express');
+const express = require('express');
 const cors = require('cors');
-const { Youtube } = require('youtube-explode');
+const ytdl = require('@distube/ytdl-core');
 
 const app = express();
 app.use(cors());
@@ -16,13 +16,26 @@ app.get('/api/get-video', async (req, res) => {
     }
 
     try {
-        const youtube = new Youtube();
-        const streamInfo = await youtube.videos.streams.getManifestAsync(videoId);
-        const muxedStream = streamInfo.getMuxedStream();
-        videoCache[videoId] = { url: muxedStream.url, timestamp: Date.now() };
-        res.json({ status: "success", url: muxedStream.url });
+        const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        const info = await ytdl.getInfo(videoUrl);
+        
+        // Cari format yang memiliki audio dan video (muxed)
+        let format = info.formats.find(f => f.hasAudio && f.hasVideo);
+        
+        // Jika tidak ada yang muxed, ambil video quality tertinggi (mungkin tanpa audio, tapi ini darurat)
+        if (!format) {
+            format = info.formats.find(f => f.hasVideo);
+        }
+
+        if (!format) {
+            throw new Error("Tidak ada format video yang ditemukan");
+        }
+
+        videoCache[videoId] = { url: format.url, timestamp: Date.now() };
+        res.json({ status: "success", url: format.url });
     } catch (error) {
-        res.status(500).json({ error: "Gagal bongkar video" });
+        console.error(error);
+        res.status(500).json({ error: "Gagal bongkar video: " + error.message });
     }
 });
 
