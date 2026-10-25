@@ -1,43 +1,31 @@
 const express = require('express');
 const cors = require('cors');
-const ytdl = require('@distube/ytdl-core');
+const play = require('play-dl');
 
 const app = express();
 app.use(cors());
 
-const videoCache = {};
-
-app.get('/api/get-video', async (req, res) => {
+// Endpoint untuk streaming video
+app.get('/api/stream-video', async (req, res) => {
     const videoId = req.query.id;
     if (!videoId) return res.status(400).json({ error: "ID kosong" });
 
-    if (videoCache[videoId] && (Date.now() - videoCache[videoId].timestamp < 7200000)) {
-        return res.json({ status: "success", url: videoCache[videoId].url });
-    }
-
     try {
         const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        const info = await ytdl.getInfo(videoUrl);
-        
-        // Cari format yang memiliki audio dan video (muxed)
-        let format = info.formats.find(f => f.hasAudio && f.hasVideo);
-        
-        // Jika tidak ada yang muxed, ambil video quality tertinggi (mungkin tanpa audio, tapi ini darurat)
-        if (!format) {
-            format = info.formats.find(f => f.hasVideo);
-        }
+        // Dapatkan stream video (kualitas terbaik yang memiliki audio & video)
+        const stream = await play.stream(videoUrl, { quality: 2 }); // 2 = 360p, 1 = 720p, 0 = 1080p (bisa disesuaikan)
 
-        if (!format) {
-            throw new Error("Tidak ada format video yang ditemukan");
-        }
+        // Set header agar browser bisa memutar video
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Length', stream.stream.readableLength || 0);
 
-        videoCache[videoId] = { url: format.url, timestamp: Date.now() };
-        res.json({ status: "success", url: format.url });
+        // Pipe stream video ke response
+        stream.stream.pipe(res);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Gagal bongkar video: " + error.message });
+        console.error("Error streaming:", error);
+        res.status(500).json({ error: "Gagal memutar video: " + error.message });
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server di port ${PORT}`));
+app.listen(PORT, () => console.log(`Server di port ${PORT}`)); 
