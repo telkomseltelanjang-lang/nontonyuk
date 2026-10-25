@@ -1,7 +1,0 @@
-version: 1
-type: web
-build:
-  framework: auto
-run:
-  command: node server.js
-  port: 3000
